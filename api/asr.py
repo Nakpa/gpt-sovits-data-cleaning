@@ -46,6 +46,9 @@ def call_asr(file_path: Path, language_hint: Optional[str] = None) -> dict:
             "并设置环境变量: DASHSCOPE_API_KEY=sk-xxx"
         )
 
+    # 华北2（北京）地域，国内用户必须设置
+    dashscope.base_http_api_url = "https://dashscope.aliyuncs.com/api/v1"
+
     api_key = os.getenv("DASHSCOPE_API_KEY")
     if not api_key:
         sys.exit("请设置环境变量 DASHSCOPE_API_KEY，从 https://bailian.console.aliyun.com 获取。")

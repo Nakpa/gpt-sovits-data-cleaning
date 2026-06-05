@@ -6,17 +6,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 DB_FILENAME = "preprocess_cache.db"
 
 
-def get_db_path(audio_dir: Path) -> Path:
-    """数据库放在音频目录下，跟着数据集走。"""
-    return audio_dir / DB_FILENAME
+def get_db_path() -> Path:
+    """数据库放在项目 .cache 目录下。"""
+    cache_dir = _PROJECT_ROOT / ".cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / DB_FILENAME
 
 
-def init_db(audio_dir: Path) -> sqlite3.Connection:
+def init_db() -> sqlite3.Connection:
     """初始化数据库，建表建索引，返回连接。"""
-    db_path = get_db_path(audio_dir)
+    db_path = get_db_path()
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -38,6 +42,8 @@ def init_db(audio_dir: Path) -> sqlite3.Connection:
             emotion_final TEXT,
             confidence  REAL,
             error_msg   TEXT,
+            quality_issues TEXT,          -- JSON array: ["削波率 12%", ...]
+            raw_asr_text TEXT,            -- ASR 原始文本 (归一化前)
             created_at  TEXT DEFAULT (datetime('now')),
             updated_at  TEXT DEFAULT (datetime('now'))
         )
@@ -48,6 +54,17 @@ def init_db(audio_dir: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_name_hash ON audio_cache(file_name, file_hash)")
     # 唯一约束保证 upsert 能正确工作
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_name_hash_unique ON audio_cache(file_name, file_hash)")
+
+    # 兼容旧数据库：尝试添加新字段
+    for col, col_def in [
+        ("quality_issues", "TEXT"),
+        ("raw_asr_text", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE audio_cache ADD COLUMN {col} {col_def}")
+        except Exception:
+            pass  # 字段已存在
+
     conn.commit()
     return conn
 
@@ -91,8 +108,10 @@ def mark_processing(conn: sqlite3.Connection, file_name: str, file_hash: str):
 
 def save_result(conn: sqlite3.Connection, file_name: str, file_hash: str,
                 asr_text: str, emotion: str, language: str, asr_raw: dict,
-                confidence: Optional[float] = None, status: str = "done"):
-    """写入 ASR 结果，状态默认为 done。filtered 状态用于被过滤的音频。"""
+                confidence: Optional[float] = None, status: str = "done",
+                quality_issues: Optional[list[str]] = None, raw_asr_text: str = ""):
+    """写入 ASR 结果。"""
+    issues_json = json.dumps(quality_issues or [], ensure_ascii=False)
     conn.execute(
         """UPDATE audio_cache SET
              status = ?,
@@ -101,10 +120,12 @@ def save_result(conn: sqlite3.Connection, file_name: str, file_hash: str,
              language = ?,
              asr_raw = ?,
              confidence = ?,
+             quality_issues = ?,
+             raw_asr_text = ?,
              updated_at = datetime('now')
            WHERE file_name = ? AND file_hash = ?""",
         (status, asr_text, emotion, language, json.dumps(asr_raw, ensure_ascii=False),
-         confidence, file_name, file_hash),
+         confidence, issues_json, raw_asr_text or "", file_name, file_hash),
     )
     conn.commit()
 
@@ -139,6 +160,20 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "SELECT status, COUNT(*) as cnt FROM audio_cache GROUP BY status"
     ).fetchall()
     return {r["status"]: r["cnt"] for r in rows}
+
+
+def clear_all(conn: sqlite3.Connection) -> int:
+    """清空所有缓存记录，返回删除条数。"""
+    cur = conn.execute("DELETE FROM audio_cache")
+    conn.commit()
+    return cur.rowcount
+
+
+def drop_db():
+    """完全删除缓存数据库文件。"""
+    db_path = get_db_path()
+    if db_path.exists():
+        db_path.unlink()
 
 
 def reset_errors(conn: sqlite3.Connection) -> int:

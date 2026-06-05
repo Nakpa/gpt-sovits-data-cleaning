@@ -1,27 +1,52 @@
-"""输出格式化 — GPT-SoVITS list.txt + JSON annotations.json."""
+"""输出格式化 — GPT-SoVITS list.txt + JSON annotations.json.
+
+每次导出自动创建版本化目录: output/v1/, output/v2/, ...
+"""
 
 import json
+import re
 import shutil
 from pathlib import Path
 
-from db import get_all_done
+from storage.db import get_all_done
 
 
-def export_all(conn, audio_dir: Path, output_dir: Path, speaker: str, language: str):
-    """从数据库读取所有已完成记录，生成三种输出。
+def next_version(output_root: Path) -> int:
+    """扫描已有版本目录，返回下一个可用版本号。"""
+    if not output_root.exists():
+        return 1
+    existing = []
+    for d in output_root.iterdir():
+        if d.is_dir():
+            m = re.match(r"^v(\d+)$", d.name)
+            if m:
+                existing.append(int(m.group(1)))
+    return max(existing) + 1 if existing else 1
 
-    1. 按情感分文件夹拷贝音频
-    2. list.txt (GPT-SoVITS 训练格式)
-    3. annotations.json (完整结构化标注)
+
+def export_all(conn, audio_dir: Path, output_root: Path, speaker: str, language: str,
+               version: int = None):
+    """从数据库读取所有已完成记录，生成版本化输出。
+
+    输出结构:
+        output_root/v{N}/
+        ├── neutral/
+        ├── happy/
+        ├── ...
+        ├── list.txt
+        └── annotations.json
     """
     records = get_all_done(conn)
     if not records:
         print("  没有已完成的记录可以导出。")
         return
 
+    if version is None:
+        version = next_version(output_root)
+
+    output_dir = output_root / f"v{version}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 构建输出
     list_lines = []
     json_data = []
 
@@ -69,10 +94,9 @@ def export_all(conn, audio_dir: Path, output_dir: Path, speaker: str, language: 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(json_data, f, ensure_ascii=False, indent=2)
 
-    print(f"  已生成:")
-    print(f"    → {list_path}  ({len(list_lines)} 条)")
-    print(f"    → {json_path}  ({len(json_data)} 条)")
-    print(f"  按情感分文件夹:")
+    print(f"  → {output_dir}/")
+    print(f"    list.txt  ({len(list_lines)} 条)")
+    print(f"    annotations.json  ({len(json_data)} 条)")
     for em in sorted(set(r.get("emotion_final") or r.get("emotion") or "neutral" for r in records)):
         count = sum(1 for r in records if (r.get("emotion_final") or r.get("emotion") or "neutral") == em)
-        print(f"    {output_dir / em}/  ({count} 个文件)")
+        print(f"    {em}/  ({count} 个文件)")

@@ -1,12 +1,12 @@
 .env
-preprocess_cache.db
+.gsc_state
+.cache/
 __pycache__/
 *.pyc
 
-# 数据目录
+# 数据目录（项目外的默认目录不受影响）
 input/
 inputs/
-audio/
 audios/
 output/
 outputs/
