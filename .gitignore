@@ -1,0 +1,19 @@
+.env
+preprocess_cache.db
+__pycache__/
+*.pyc
+
+# 数据目录
+input/
+inputs/
+audio/
+audios/
+output/
+outputs/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.opus
