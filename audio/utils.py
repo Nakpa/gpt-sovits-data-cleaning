@@ -1,11 +1,13 @@
 """音频文件校验 — 采样率、削波、静音检测."""
 
+import json
 import struct
+import subprocess
 import wave
 from pathlib import Path
 from typing import Optional
 
-AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus"}
+AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus", ".wma"}
 
 # GPT-SoVITS v2-pro-plus 要求
 REQUIRED_SAMPLE_RATE = 32000
@@ -23,16 +25,39 @@ def is_audio_file(path: Path) -> bool:
     return path.suffix.lower() in AUDIO_EXTENSIONS
 
 
-def get_wav_duration_ms(path: Path) -> Optional[float]:
-    if path.suffix.lower() != ".wav":
-        return None
+def get_audio_duration_ms(path: Path) -> Optional[float]:
+    """Get duration of an audio file in milliseconds.
+
+    Uses wave module for WAV files, ffprobe as universal fallback.
+    """
+    if path.suffix.lower() == ".wav":
+        try:
+            with wave.open(str(path), "rb") as wf:
+                frames = wf.getnframes()
+                rate = wf.getframerate()
+                if rate > 0:
+                    return (frames / rate) * 1000
+        except Exception:
+            pass  # fall through to ffprobe
+
+    # ffprobe fallback for all formats
+    return _ffprobe_duration_ms(path)
+
+
+def _ffprobe_duration_ms(path: Path) -> Optional[float]:
     try:
-        with wave.open(str(path), "rb") as wf:
-            frames = wf.getnframes()
-            rate = wf.getframerate()
-            if rate == 0:
-                return None
-            return (frames / rate) * 1000
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_format", str(path),
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+        info = json.loads(result.stdout)
+        duration_s = float(info.get("format", {}).get("duration", 0))
+        return duration_s * 1000 if duration_s > 0 else None
     except Exception:
         return None
 

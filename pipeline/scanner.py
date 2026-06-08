@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
-from audio.utils import is_audio_file, get_wav_duration_ms, check_sample_rate
+from audio.utils import is_audio_file, get_audio_duration_ms, check_sample_rate
 from storage.db import lookup_cache, insert_pending, save_result
 
 # 时长过滤阈值 (毫秒)
@@ -33,12 +33,13 @@ def scan_directory(audio_dir: Path, conn: sqlite3.Connection,
         [p for p in audio_dir.iterdir() if p.is_file() and is_audio_file(p)]
     )
 
+    source_dir = str(audio_dir.resolve())
     result = {"total": len(audio_files), "cached": 0, "new": 0, "changed": 0, "skipped": 0, "items": {}, "warnings": []}
 
     def _scan_one(fp: Path) -> tuple[str, str, Path, int, Optional[float], dict]:
         h = compute_md5(fp)
         size = fp.stat().st_size
-        dur = get_wav_duration_ms(fp)
+        dur = get_audio_duration_ms(fp)
         sr_check = check_sample_rate(fp) if fp.suffix.lower() == ".wav" else {"ok": True, "actual": None}
         return fp.name, h, fp, size, dur, sr_check
 
@@ -58,7 +59,7 @@ def scan_directory(audio_dir: Path, conn: sqlite3.Connection,
                 # 写入 filtered 状态，不进入处理队列
                 save_result(conn, name, file_hash,
                     asr_text="", emotion="neutral", language="", asr_raw={},
-                    status="filtered",
+                    status="filtered", source_dir=source_dir,
                     quality_issues=[f"duration too short: {dur:.0f}ms < {MIN_DURATION_MS}ms"])
                 result["items"][str(fp)] = "skipped"
                 continue
@@ -67,10 +68,17 @@ def scan_directory(audio_dir: Path, conn: sqlite3.Connection,
                 result["skipped"] += 1
                 save_result(conn, name, file_hash,
                     asr_text="", emotion="neutral", language="", asr_raw={},
-                    status="filtered",
+                    status="filtered", source_dir=source_dir,
                     quality_issues=[f"duration too long: {dur/1000:.1f}s > {MAX_DURATION_MS/1000:.0f}s"])
                 result["items"][str(fp)] = "skipped"
                 continue
+
+        # backfill duration for cached files that are missing it
+        if dur is not None:
+            conn.execute(
+                "UPDATE audio_cache SET duration_ms = ? WHERE file_name = ? AND file_hash = ? AND duration_ms IS NULL",
+                (dur, name, file_hash),
+            )
 
         cached = lookup_cache(conn, name, file_hash)
         if cached:
@@ -85,7 +93,7 @@ def scan_directory(audio_dir: Path, conn: sqlite3.Connection,
                 result["changed"] += 1
             else:
                 result["new"] += 1
-            insert_pending(conn, name, str(fp), file_hash, size, dur)
+            insert_pending(conn, name, str(fp), file_hash, size, dur, source_dir=source_dir)
             result["items"][str(fp)] = "new"
 
     return result

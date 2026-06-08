@@ -59,12 +59,14 @@ def init_db() -> sqlite3.Connection:
     for col, col_def in [
         ("quality_issues", "TEXT"),
         ("raw_asr_text", "TEXT"),
+        ("source_dir", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE audio_cache ADD COLUMN {col} {col_def}")
         except Exception:
             pass  # 字段已存在
 
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_dir ON audio_cache(source_dir)")
     conn.commit()
     return conn
 
@@ -81,19 +83,21 @@ def lookup_cache(conn: sqlite3.Connection, file_name: str, file_hash: str) -> Op
 
 
 def insert_pending(conn: sqlite3.Connection, file_name: str, file_path: str,
-                   file_hash: str, file_size: int, duration_ms: Optional[float] = None):
+                   file_hash: str, file_size: int, duration_ms: Optional[float] = None,
+                   source_dir: str = ""):
     """插入或重置一条待处理记录。已存在的记录（包括 error）会被重置为 pending。"""
     conn.execute(
-        """INSERT INTO audio_cache (file_name, file_hash, file_path, file_size, duration_ms, status)
-           VALUES (?, ?, ?, ?, ?, 'pending')
+        """INSERT INTO audio_cache (file_name, file_hash, file_path, file_size, duration_ms, source_dir, status)
+           VALUES (?, ?, ?, ?, ?, ?, 'pending')
            ON CONFLICT(file_name, file_hash) DO UPDATE SET
              status = 'pending',
              file_path = excluded.file_path,
              file_size = excluded.file_size,
              duration_ms = excluded.duration_ms,
+             source_dir = excluded.source_dir,
              error_msg = NULL,
              updated_at = datetime('now')""",
-        (file_name, file_hash, file_path, file_size, duration_ms),
+        (file_name, file_hash, file_path, file_size, duration_ms, source_dir),
     )
     conn.commit()
 
@@ -109,24 +113,33 @@ def mark_processing(conn: sqlite3.Connection, file_name: str, file_hash: str):
 def save_result(conn: sqlite3.Connection, file_name: str, file_hash: str,
                 asr_text: str, emotion: str, language: str, asr_raw: dict,
                 confidence: Optional[float] = None, status: str = "done",
-                quality_issues: Optional[list[str]] = None, raw_asr_text: str = ""):
+                quality_issues: Optional[list[str]] = None, raw_asr_text: str = "",
+                source_dir: str = ""):
     """写入 ASR 结果。"""
     issues_json = json.dumps(quality_issues or [], ensure_ascii=False)
-    conn.execute(
-        """UPDATE audio_cache SET
-             status = ?,
-             asr_text = ?,
-             emotion = ?,
-             language = ?,
-             asr_raw = ?,
-             confidence = ?,
-             quality_issues = ?,
-             raw_asr_text = ?,
-             updated_at = datetime('now')
-           WHERE file_name = ? AND file_hash = ?""",
-        (status, asr_text, emotion, language, json.dumps(asr_raw, ensure_ascii=False),
-         confidence, issues_json, raw_asr_text or "", file_name, file_hash),
-    )
+    params = [status, asr_text, emotion, language, json.dumps(asr_raw, ensure_ascii=False),
+              confidence, issues_json, raw_asr_text or "", file_name, file_hash]
+    # Only update source_dir if provided and not already set
+    if source_dir:
+        conn.execute(
+            """UPDATE audio_cache SET
+                 status = ?, asr_text = ?, emotion = ?, language = ?, asr_raw = ?,
+                 confidence = ?, quality_issues = ?, raw_asr_text = ?, source_dir = ?,
+                 updated_at = datetime('now')
+               WHERE file_name = ? AND file_hash = ?""",
+            (status, asr_text, emotion, language, json.dumps(asr_raw, ensure_ascii=False),
+             confidence, issues_json, raw_asr_text or "", source_dir, file_name, file_hash),
+        )
+    else:
+        conn.execute(
+            """UPDATE audio_cache SET
+                 status = ?, asr_text = ?, emotion = ?, language = ?, asr_raw = ?,
+                 confidence = ?, quality_issues = ?, raw_asr_text = ?,
+                 updated_at = datetime('now')
+               WHERE file_name = ? AND file_hash = ?""",
+            (status, asr_text, emotion, language, json.dumps(asr_raw, ensure_ascii=False),
+             confidence, issues_json, raw_asr_text or "", file_name, file_hash),
+        )
     conn.commit()
 
 
@@ -146,19 +159,31 @@ def update_emotion_final(conn: sqlite3.Connection, record_id: int, emotion_final
     conn.commit()
 
 
-def get_all_done(conn: sqlite3.Connection) -> list[dict]:
-    """返回所有已完成的记录。"""
-    rows = conn.execute(
-        "SELECT * FROM audio_cache WHERE status = 'done' ORDER BY id"
-    ).fetchall()
+def get_all_done(conn: sqlite3.Connection, source_dir: str = "") -> list[dict]:
+    """返回所有已完成的记录，可按 source_dir 过滤。"""
+    if source_dir:
+        rows = conn.execute(
+            "SELECT * FROM audio_cache WHERE status = 'done' AND source_dir = ? ORDER BY id",
+            (source_dir,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM audio_cache WHERE status = 'done' ORDER BY id"
+        ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
-def get_stats(conn: sqlite3.Connection) -> dict:
-    """统计各状态的记录数。"""
-    rows = conn.execute(
-        "SELECT status, COUNT(*) as cnt FROM audio_cache GROUP BY status"
-    ).fetchall()
+def get_stats(conn: sqlite3.Connection, source_dir: str = "") -> dict:
+    """统计各状态的记录数，可按 source_dir 过滤。"""
+    if source_dir:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) as cnt FROM audio_cache WHERE source_dir = ? GROUP BY status",
+            (source_dir,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) as cnt FROM audio_cache GROUP BY status"
+        ).fetchall()
     return {r["status"]: r["cnt"] for r in rows}
 
 

@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPT-SoVITS Data Cleaning — Studio Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   NEON STUDIO CONSOLE — Design System
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --bg-deep: #06060f;
+  --bg-surface: #0d0d1c;
+  --bg-card: #13132a;
+  --bg-card-hover: #181835;
+  --bg-input: #0a0a18;
+  --border: #1e1e40;
+  --border-focus: #333370;
+  --cyan: #00e5ff;
+  --cyan-dim: rgba(0, 229, 255, 0.15);
+  --cyan-glow: 0 0 20px rgba(0, 229, 255, 0.3), 0 0 60px rgba(0, 229, 255, 0.1);
+  --magenta: #ff2d95;
+  --magenta-dim: rgba(255, 45, 149, 0.15);
+  --magenta-glow: 0 0 20px rgba(255, 45, 149, 0.3);
+  --green: #00ff88;
+  --green-dim: rgba(0, 255, 136, 0.15);
+  --amber: #ffb800;
+  --amber-dim: rgba(255, 184, 0, 0.15);
+  --red: #ff4455;
+  --red-dim: rgba(255, 68, 85, 0.15);
+  --text: #e4e4f0;
+  --text-dim: #8888aa;
+  --text-muted: #555578;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 16px;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { font-size: 15px; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-deep);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Background ──────────────────────────────────────────────── */
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 70%);
+}
+
+.bg-orb {
+  position: fixed; border-radius: 50%; filter: blur(120px); z-index: 0; pointer-events: none;
+  opacity: 0.12;
+}
+.bg-orb--cyan {
+  width: 600px; height: 600px;
+  background: var(--cyan);
+  top: -200px; right: -150px;
+  animation: orbFloat 20s ease-in-out infinite;
+}
+.bg-orb--magenta {
+  width: 500px; height: 500px;
+  background: var(--magenta);
+  bottom: -200px; left: -150px;
+  animation: orbFloat 24s ease-in-out infinite reverse;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -30px) scale(1.08); }
+  66% { transform: translate(-20px, 20px) scale(0.94); }
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-focus); }
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+.sidebar {
+  position: fixed; z-index: 100;
+  width: 250px; height: 100vh;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 28px 20px;
+  gap: 8px;
+  transition: transform var(--transition);
+}
+
+.sidebar-logo {
+  font-family: var(--font-display);
+  font-size: 1.5rem; font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 24px;
+  user-select: none;
+}
+.sidebar-logo span:first-child { color: var(--text); }
+.sidebar-logo span:last-child { color: var(--cyan); }
+
+.sidebar-nav {
+  display: flex; flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.sidebar-nav button {
+  font-family: var(--font-body);
+  font-size: 0.9rem; font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex; align-items: center; gap: 10px;
+  letter-spacing: 0.01em;
+}
+.sidebar-nav button:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.04);
+}
+.sidebar-nav button.active {
+  color: var(--cyan);
+  background: var(--cyan-dim);
+  box-shadow: inset 2px 0 0 var(--cyan);
+}
+.sidebar-nav button .nav-icon {
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+}
+
+.sidebar-status {
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.sidebar-status .dot {
+  display: inline-block; width: 7px; height: 7px;
+  border-radius: 50%; margin-right: 6px;
+  vertical-align: middle;
+}
+.dot--ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.dot--warn { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.dot--err { background: var(--red); box-shadow: 0 0 8px var(--red); }
+.dot--idle { background: var(--text-muted); }
+
+/* ── Main Content ────────────────────────────────────────────── */
+.main {
+  margin-left: 250px;
+  flex: 1;
+  padding: 36px 40px;
+  position: relative;
+  z-index: 10;
+  max-width: 1200px;
+  width: 100%;
+}
+.main-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 32px;
+}
+.main-header h1 {
+  font-family: var(--font-display);
+  font-size: 1.8rem; font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.main-header .version {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.card:hover { border-color: var(--border-focus); }
+.card--glow:hover { box-shadow: var(--cyan-glow); }
+.card-header {
+  font-family: var(--font-display);
+  font-size: 1rem; font-weight: 600;
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+  letter-spacing: -0.01em;
+}
+.card-header .icon { font-size: 1.2rem; }
+
+/* ── Stats Grid ──────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition);
+}
+.stat-card:hover { border-color: var(--border-focus); transform: translateY(-2px); }
+.stat-card::after {
+  content: '';
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 3px;
+}
+.stat-card--done::after { background: var(--green); box-shadow: 0 0 12px var(--green); }
+.stat-card--pending::after { background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+.stat-card--error::after { background: var(--red); box-shadow: 0 0 12px var(--red); }
+.stat-card--filtered::after { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+.stat-card--total::after { background: var(--magenta); box-shadow: 0 0 12px var(--magenta); }
+
+.stat-card .stat-label {
+  font-size: 0.8rem; font-weight: 500;
+  color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.stat-card .stat-value {
+  font-family: var(--font-display);
+  font-size: 2.4rem; font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.btn {
+  font-family: var(--font-body);
+  font-size: 0.85rem; font-weight: 600;
+  padding: 9px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  letter-spacing: 0.01em;
+  display: inline-flex; align-items: center; gap: 7px;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.btn--primary {
+  background: var(--cyan);
+  color: #000;
+  border-color: var(--cyan);
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.25);
+}
+.btn--primary:hover:not(:disabled) {
+  box-shadow: 0 0 36px rgba(0, 229, 255, 0.4);
+  transform: translateY(-1px);
+}
+.btn--secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--border-focus);
+  background: rgba(255,255,255,0.04);
+}
+.btn--danger {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: var(--red);
+}
+.btn--danger:hover:not(:disabled) {
+  background: rgba(255,68,85,0.25);
+}
+.btn--sm { font-size: 0.78rem; padding: 6px 14px; }
+.btn--lg { font-size: 0.95rem; padding: 12px 28px; }
+
+/* ── Form Elements ───────────────────────────────────────────── */
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: 0.8rem; font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.form-input, .form-select {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  transition: border-color var(--transition);
+  outline: none;
+}
+.form-input:focus, .form-select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-dim);
+}
+.form-input::placeholder { color: var(--text-muted); }
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+/* ── Progress Bar ────────────────────────────────────────────── */
+.progress-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+.progress-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+  font-family: var(--font-mono); font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.progress-pct {
+  font-family: var(--font-display);
+  font-size: 3rem; font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: -0.03em;
+}
+.progress-track {
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--magenta));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+}
+.progress-fill::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.progress-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+  font-family: var(--font-mono); font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.progress-info span { color: var(--text); }
+
+/* ── Log Console ─────────────────────────────────────────────── */
+.log-console {
+  background: #050512;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-height: 320px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+.log-line { color: var(--text-dim); }
+.log-line--ok { color: var(--green); }
+.log-line--err { color: var(--red); }
+.log-line--info { color: var(--cyan); }
+.log-line--warn { color: var(--amber); }
+
+/* ── Table ───────────────────────────────────────────────────── */
+.data-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.data-table th {
+  background: var(--bg-surface);
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+.data-table tr { transition: background var(--transition); }
+.data-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-family: var(--font-body);
+  font-size: 0.72rem; font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.badge--done { background: var(--green-dim); color: var(--green); }
+.badge--pending { background: var(--cyan-dim); color: var(--cyan); }
+.badge--error { background: var(--red-dim); color: var(--red); }
+.badge--filtered { background: var(--amber-dim); color: var(--amber); }
+.badge--processing { background: var(--magenta-dim); color: var(--magenta); }
+.badge--cached { background: rgba(100,100,200,0.15); color: #8888cc; }
+.badge--new { background: var(--cyan-dim); color: var(--cyan); }
+
+/* ── Emotion Bars ────────────────────────────────────────────── */
+.emotion-bars { display: flex; flex-direction: column; gap: 8px; }
+.emotion-bar-row {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 0.82rem;
+}
+.emotion-bar-label {
+  min-width: 80px; text-align: right;
+  font-weight: 500; color: var(--text-dim);
+}
+.emotion-bar-track {
+  flex: 1; height: 20px;
+  background: var(--bg-input);
+  border-radius: 10px; overflow: hidden;
+}
+.emotion-bar-fill {
+  height: 100%; border-radius: 10px;
+  display: flex; align-items: center;
+  padding-left: 10px;
+  font-family: var(--font-mono); font-size: 0.7rem;
+  font-weight: 600;
+  min-width: fit-content;
+  transition: width 0.5s ease;
+}
+.emotion-bar-count { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text); min-width: 50px; }
+
+/* ── Tabs/Sections ───────────────────────────────────────────── */
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeSlideIn 0.35s ease; }
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem; font-weight: 600;
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+}
+
+/* ── Toast ───────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed; top: 20px; right: 20px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.toast {
+  padding: 14px 22px;
+  border-radius: var(--radius);
+  font-size: 0.85rem; font-weight: 500;
+  animation: toastIn 0.3s ease, toastOut 0.3s ease 3.5s forwards;
+  border: 1px solid;
+  backdrop-filter: blur(12px);
+  max-width: 420px;
+}
+.toast--info { background: rgba(0,229,255,0.12); border-color: var(--cyan); color: var(--cyan); }
+.toast--success { background: rgba(0,255,136,0.12); border-color: var(--green); color: var(--green); }
+.toast--error { background: rgba(255,68,85,0.12); border-color: var(--red); color: var(--red); }
+.toast--warn { background: rgba(255,184,0,0.12); border-color: var(--amber); color: var(--amber); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* ── Warning / Alert ─────────────────────────────────────────── */
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem; font-weight: 500;
+  margin-bottom: 14px;
+  border: 1px solid;
+}
+.alert--warn { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+.alert--info { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); }
+.alert--error { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+/* ── Empty State ─────────────────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 60px 20px;
+  color: var(--text-muted);
+}
+.empty-state .icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+.empty-state p { font-size: 0.9rem; }
+
+/* ── Toggle Switch ───────────────────────────────────────────── */
+.toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; font-size: 0.85rem; color: var(--text-dim);
+  user-select: none;
+}
+.toggle input { display: none; }
+.toggle-track {
+  width: 40px; height: 22px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  position: relative;
+  transition: all var(--transition);
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  background: var(--text-dim);
+  border-radius: 50%;
+  top: 2px; left: 2px;
+  transition: all var(--transition);
+}
+.toggle input:checked + .toggle-track {
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+}
+.toggle input:checked + .toggle-track::after {
+  background: var(--cyan);
+  left: 20px;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; padding: 20px 16px; }
+  .stats-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .section-grid { grid-template-columns: 1fr; }
+  .progress-info { grid-template-columns: 1fr; }
+}
+
+/* ── Utility ─────────────────────────────────────────────────── */
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.mt-16 { margin-top: 16px; }
+.mt-20 { margin-top: 20px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-20 { margin-bottom: 20px; }
+.text-mono { font-family: var(--font-mono); }
+.text-dim { color: var(--text-dim); }
+.w-full { width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-orb bg-orb--cyan"></div>
+<div class="bg-orb bg-orb--magenta"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SIDEBAR
+     ═══════════════════════════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span>GPT-SoVITS</span>&nbsp;<span>Clean</span>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav">
+    <button class="active" data-tab="dashboard">
+      <span class="nav-icon">◉</span> Dashboard
+    </button>
+    <button data-tab="pipeline">
+      <span class="nav-icon">▶</span> Pipeline
+    </button>
+    <button data-tab="files">
+      <span class="nav-icon">☰</span> Files
+    </button>
+    <button data-tab="export">
+      <span class="nav-icon">↗</span> Export
+    </button>
+  </nav>
+  <div class="sidebar-status" id="sidebarStatus">
+    <span class="dot dot--idle" id="statusDot"></span>
+    <span id="statusText">Idle</span>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MAIN CONTENT
+     ═══════════════════════════════════════════════════════════════ -->
+<main class="main" id="mainContent">
+  <div class="main-header">
+    <h1 id="tabTitle">Dashboard</h1>
+    <span class="version">v0.1.0</span>
+  </div>
+
+  <!-- ── Dashboard ──────────────────────────────────────────────── -->
+  <section class="tab-content active" id="tab-dashboard">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card stat-card--total">
+        <div class="stat-label">Total Files</div>
+        <div class="stat-value" id="statTotal">—</div>
+      </div>
+      <div class="stat-card stat-card--done">
+        <div class="stat-label">Done</div>
+        <div class="stat-value" id="statDone">—</div>
+      </div>
+      <div class="stat-card stat-card--pending">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value" id="statPending">—</div>
+      </div>
+      <div class="stat-card stat-card--error">
+        <div class="stat-label">Errors</div>
+        <div class="stat-value" id="statError">—</div>
+      </div>
+      <div class="stat-card stat-card--filtered">
+        <div class="stat-label">Filtered</div>
+        <div class="stat-value" id="statFiltered">—</div>
+      </div>
+    </div>
+
+    <div class="section-grid">
+      <div class="card card--glow">
+        <div class="card-header"><span class="icon">🎭</span> Emotion Distribution</div>
+        <div class="emotion-bars" id="emotionBars">
+          <div class="empty-state"><p>No data yet. Start a pipeline run.</p></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="icon">📂</span> Registered Directories</div>
+        <div id="dirList" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto">
+          <div class="empty-state"><p>No directories registered. Use Scan or Add below.</p></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input class="form-input" id="newDirInput" type="text" placeholder="Paste directory path..." style="flex:1">
+          <button class="btn btn--primary btn--sm" onclick="addDirectory()">+ Add</button>
+        </div>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+          <div class="flex-between" style="font-size:0.85rem;margin-bottom:8px">
+            <span class="text-dim">API Key (DashScope)</span>
+            <span id="dashApiKey" style="font-size:0.78rem">{{ '✓ Configured' if has_api_key else '✗ Missing' }}</span>
+          </div>
+          <div class="flex-between" style="font-size:0.85rem;margin-bottom:8px">
+            <span class="text-dim">Total Quality Issues</span>
+            <span id="dashQuality" class="text-mono" style="font-size:0.78rem">—</span>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:12px">
+            <button class="btn btn--secondary btn--sm" onclick="refreshStats()" style="flex:1">↻ Refresh</button>
+            <button class="btn btn--secondary btn--sm" onclick="refreshDurations()" style="flex:1">⏱ Durations</button>
+          </div>
+          <button class="btn btn--danger btn--sm w-full mt-6" onclick="clearCache()">✕ Clear All Cache</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-20" id="recentActivity" style="display:none">
+      <div class="card-header"><span class="icon">⏱</span> Recent Activity</div>
+      <div id="activityLog" style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-dim)"></div>
+    </div>
+  </section>
+
+  <!-- ── Pipeline ───────────────────────────────────────────────── -->
+  <section class="tab-content" id="tab-pipeline">
+    <!-- Step 1: Directory -->
+    <div class="card mb-20">
+      <div class="card-header"><span class="icon">📂</span> Step 1 — Audio Directory</div>
+      <div class="form-row">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Select Registered Directory</label>
+          <div style="display:flex;gap:10px">
+            <select class="form-input" id="pipelineDir" style="flex:1">
+              <option value="">-- Select a directory --</option>
+              {% for d in saved_dirs %}
+              <option value="{{ d }}">{{ d }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn--secondary" onclick="pipelineScan()" id="btnScan">Scan</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <input class="form-input" id="pipelineDirCustom" type="text" placeholder="Or type a custom path...">
+            <button class="btn btn--secondary btn--sm" onclick="pipelineDir.value=pipelineDirCustom.value;pipelineScan()">Use Custom</button>
+          </div>
+        </div>
+      </div>
+      <div id="scanResult" style="display:none;margin-top:14px"></div>
+    </div>
+
+    <!-- Step 2: Config -->
+    <div class="card mb-20" id="pipelineConfig" style="display:none">
+      <div class="card-header"><span class="icon">⚙</span> Step 2 — Configuration</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Speaker Name</label>
+          <input class="form-input" id="pipelineSpeaker" value="heroine" placeholder="heroine">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Language</label>
+          <input class="form-input" id="pipelineLanguage" value="ja" placeholder="ja">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Concurrency</label>
+          <input class="form-input" id="pipelineConcurrency" type="number" value="3" min="1" max="10">
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <label class="toggle">
+          <input type="checkbox" id="pipelineFix"><span class="toggle-track"></span>
+          Auto-fix audio (resample/normalize)
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="pipelineSkipPost"><span class="toggle-track"></span>
+          Skip post-processing
+        </label>
+        <button class="btn btn--primary btn--lg" onclick="pipelineStart()" id="btnProcess">
+          ▶ Start Processing
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Progress -->
+    <div id="pipelineProgress" style="display:none">
+      <div class="progress-container">
+        <div class="progress-header">
+          <span id="progFile">Initializing...</span>
+          <div class="progress-pct" id="progPct">0%</div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progFill" style="width:0%"></div>
+        </div>
+        <div class="progress-info">
+          <div>Files <span id="progFiles">0 / 0</span></div>
+          <div>Elapsed <span id="progElapsed">0s</span></div>
+          <div>ETA <span id="progEta">—</span></div>
+        </div>
+      </div>
+      <div class="log-console mt-16" id="logConsole">
+        <div class="log-line log-line--info">Waiting for task to start...</div>
+      </div>
+    </div>
+
+    <!-- Step 4: Results -->
+    <div id="pipelineResults" style="display:none" class="mt-20"></div>
+  </section>
+
+  <!-- ── Files ──────────────────────────────────────────────────── -->
+  <section class="tab-content" id="tab-files">
+    <div class="flex-between mb-12" style="gap:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select class="form-input" id="filesDirFilter" onchange="refreshFiles()" style="width:auto;min-width:200px">
+          <option value="">All Directories</option>
+        </select>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="fileFilters">
+          <button class="btn btn--secondary btn--sm active" data-status="">All</button>
+          <button class="btn btn--secondary btn--sm" data-status="done">Done</button>
+          <button class="btn btn--secondary btn--sm" data-status="pending">Pending</button>
+          <button class="btn btn--secondary btn--sm" data-status="error">Error</button>
+          <button class="btn btn--secondary btn--sm" data-status="filtered">Filtered</button>
+        </div>
+      </div>
+      <button class="btn btn--secondary btn--sm" onclick="refreshFiles()">↻ Refresh</button>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Status</th>
+            <th>Emotion</th>
+            <th>Text Preview</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody id="filesTableBody">
+          <tr><td colspan="5"><div class="empty-state"><p>Run a scan or pipeline to see files.</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="flex-between mt-16" style="font-size:0.82rem;color:var(--text-dim)">
+      <span id="filesCount">0 files</span>
+      <span id="filesPage"></span>
+    </div>
+  </section>
+
+  <!-- ── Export ─────────────────────────────────────────────────── -->
+  <section class="tab-content" id="tab-export">
+    <div class="card mb-20">
+      <div class="card-header"><span class="icon">↗</span> Generate Training Data</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Audio Directory</label>
+          <select class="form-input" id="exportDir">
+            <option value="">-- Select a directory --</option>
+            {% for d in saved_dirs %}
+            <option value="{{ d }}">{{ d }}</option>
+            {% endfor %}
+          </select>
+          <input class="form-input mt-8" id="exportDirCustom" type="text" placeholder="Or type a custom path...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Output Directory</label>
+          <input class="form-input" id="exportOutput" value="./output" placeholder="./output">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Speaker</label>
+          <input class="form-input" id="exportSpeaker" value="heroine">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Language</label>
+          <input class="form-input" id="exportLanguage" value="ja">
+        </div>
+      </div>
+      <button class="btn btn--primary" onclick="generateExport()">Generate Export</button>
+    </div>
+    <div id="exportResult"></div>
+  </section>
+</main>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════════ -->
+<script>
+/* ── Navigation ──────────────────────────────────────────────── */
+const tabs = ['dashboard','pipeline','files','export'];
+const titles = {dashboard:'Dashboard',pipeline:'Pipeline',files:'Files',export:'Export'};
+
+document.querySelectorAll('#sidebarNav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('#sidebarNav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('tabTitle').textContent = titles[tab];
+    if (tab === 'dashboard') refreshStats();
+    if (tab === 'files') refreshFiles();
+  });
+});
+
+/* ── Toast ───────────────────────────────────────────────────── */
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = 'toast toast--' + type;
+  el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+/* ── API Helpers ─────────────────────────────────────────────── */
+async function api(method, url, body=null) {
+  const opts = { method };
+  if (body) {
+    if (body instanceof FormData) { opts.body = body; }
+    else { opts.body = body; }
+  }
+  // If not FormData, use FormData for POST
+  if (method === 'POST' && body && !(body instanceof FormData)) {
+    const fd = new FormData();
+    for (const [k,v] of Object.entries(body)) fd.append(k, String(v));
+    opts.body = fd;
+  }
+  try {
+    const res = await fetch(url, opts);
+    return await res.json();
+  } catch(e) {
+    return {ok:false, error: e.message};
+  }
+}
+
+/* ── Stats ───────────────────────────────────────────────────── */
+async function refreshStats() {
+  const data = await api('GET', '/api/stats');
+  if (data.total === undefined) return;
+  document.getElementById('statTotal').textContent = data.total;
+  document.getElementById('statDone').textContent = data.done || 0;
+  document.getElementById('statPending').textContent = data.pending || 0;
+  document.getElementById('statError').textContent = data.error || 0;
+  document.getElementById('statFiltered').textContent = data.filtered || 0;
+  document.getElementById('dashQuality').textContent = data.quality_issues || '0';
+
+  // Emotion bars
+  const bars = document.getElementById('emotionBars');
+  const emotions = data.emotions || {};
+  const names = {neutral:'Neutral',happy:'Happy',sad:'Sad',angry:'Angry',surprised:'Surprised',fearful:'Fearful',disgusted:'Disgusted'};
+  const colors = {neutral:'#888',happy:'#00e5ff',sad:'#5588ff',angry:'#ff2d95',surprised:'#ffb800',fearful:'#aa66ff',disgusted:'#88aa44'};
+  const total = Object.values(emotions).reduce((a,b)=>a+b,0);
+  if (total === 0) {
+    bars.innerHTML = '<div class="empty-state"><p>No emotion data yet.</p></div>';
+  } else {
+    bars.innerHTML = Object.entries(emotions).sort((a,b)=>b[1]-a[1]).map(([e,c]) => {
+      const pct = (c/total*100).toFixed(1);
+      return `<div class="emotion-bar-row">
+        <span class="emotion-bar-label">${names[e]||e}</span>
+        <div class="emotion-bar-track"><div class="emotion-bar-fill" style="width:${Math.max(pct,2)}%;background:${colors[e]||'#888'}">${pct}%</div></div>
+        <span class="emotion-bar-count">${c}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Directory list + dropdowns
+  await refreshDirList(data.registered_dirs || []);
+  updateStatus(data.pending > 0 || data.processing > 0);
+}
+
+/* ── Directory Management ─────────────────────────────────────── */
+async function refreshDirList(registeredDirs) {
+  // Fetch full dir data if not provided
+  let dirsData;
+  if (registeredDirs && registeredDirs.length > 0) {
+    const res = await api('GET', '/api/dirs');
+    dirsData = res.dirs || [];
+  } else {
+    dirsData = [];
+  }
+
+  // Dashboard dir list
+  const container = document.getElementById('dirList');
+  if (dirsData.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>No directories registered. Use Scan or Add below.</p></div>';
+  } else {
+    container.innerHTML = dirsData.map(d => `
+      <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.78rem;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(d.path)}">${escapeHtml(d.path)}</div>
+          <div style="display:flex;gap:10px;margin-top:4px;font-size:0.72rem;font-family:var(--font-mono)">
+            <span style="color:var(--green)">✓${d.done||0}</span>
+            <span style="color:var(--cyan)">⏳${d.pending||0}</span>
+            <span style="color:var(--red)">✗${d.error||0}</span>
+            <span style="color:var(--amber)">⊘${d.filtered||0}</span>
+          </div>
+        </div>
+        <button class="btn btn--danger btn--sm" onclick="removeDirectory('${escapeHtml(d.path).replace(/'/g,"\\'")}')" title="Remove">✕</button>
+      </div>
+    `).join('');
+  }
+
+  // Update all directory dropdowns
+  const dropdowns = ['pipelineDir', 'filesDirFilter'];
+  dropdowns.forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const currentVal = sel.value;
+    sel.innerHTML = (id === 'filesDirFilter' ? '<option value="">All Directories</option>' : '<option value="">-- Select a directory --</option>') +
+      dirsData.map(d => `<option value="${escapeHtml(d.path)}">${escapeHtml(d.path)}</option>`).join('');
+    if (currentVal) sel.value = currentVal;
+  });
+
+  // Export dropdown — only show dirs with done files
+  const exportSel = document.getElementById('exportDir');
+  if (exportSel) {
+    const currentVal = exportSel.value;
+    const dirsWithData = dirsData.filter(d => d.done > 0);
+    if (dirsWithData.length === 0) {
+      exportSel.innerHTML = '<option value="">-- No exportable data --</option>';
+    } else {
+      exportSel.innerHTML = '<option value="">-- Select a directory --</option>' +
+        dirsWithData.map(d => `<option value="${escapeHtml(d.path)}">${escapeHtml(d.path)} (${d.done} files)</option>`).join('');
+      if (currentVal) exportSel.value = currentVal;
+    }
+  }
+
+}
+
+async function addDirectory() {
+  const input = document.getElementById('newDirInput');
+  const dir = input.value.trim();
+  if (!dir) { toast('Enter a directory path', 'warn'); return; }
+  const data = await api('POST', '/api/dirs', {dir_path:dir});
+  if (data.ok) {
+    toast(data.is_new ? 'Directory registered' : 'Directory already registered', 'success');
+    input.value = '';
+    refreshStats();
+  } else {
+    toast(data.error, 'error');
+  }
+}
+
+async function removeDirectory(path) {
+  if (!confirm('Remove this directory from the list? Cache data will be preserved.')) return;
+  const data = await api('DELETE', '/api/dirs', {dir_path:path});
+  if (data.ok) {
+    toast(data.message, 'success');
+    refreshStats();
+  } else {
+    toast(data.error, 'error');
+  }
+}
+
+function updateStatus(busy) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if (busy) {
+    dot.className = 'dot dot--warn';
+    txt.textContent = 'Processing...';
+  } else {
+    dot.className = 'dot dot--ok';
+    txt.textContent = 'Ready';
+  }
+}
+
+/* ── Pipeline ────────────────────────────────────────────────── */
+async function pipelineScan() {
+  const sel = document.getElementById('pipelineDir');
+  const dir = sel.value.trim() || document.getElementById('pipelineDirCustom').value.trim();
+  if (!dir) { toast('Select or enter a directory path', 'warn'); return; }
+  const btn = document.getElementById('btnScan');
+  btn.disabled = true; btn.textContent = 'Scanning...';
+
+  const data = await api('POST', '/api/scan', {dir_path:dir});
+  btn.disabled = false; btn.textContent = 'Scan';
+
+  if (!data.ok) { toast(data.error, 'error'); return; }
+
+  const res = document.getElementById('scanResult');
+  res.style.display = 'block';
+  const warningsHtml = data.warnings.length ? `
+    <div class="alert alert--warn mb-12">
+      ⚠ ${data.warnings.length} quality warnings
+      <div style="font-size:0.75rem;margin-top:4px;max-height:120px;overflow-y:auto">
+        ${data.warnings.slice(0,15).map(w => '<div>'+escapeHtml(w)+'</div>').join('')}
+        ${data.warnings.length > 15 ? '<div>... and '+(data.warnings.length-15)+' more</div>' : ''}
+      </div>
+    </div>` : '';
+
+  res.innerHTML = `
+    ${warningsHtml}
+    <div class="stats-grid" style="margin-bottom:0">
+      <div class="stat-card stat-card--total"><div class="stat-label">Total</div><div class="stat-value" style="font-size:1.8rem">${data.total}</div></div>
+      <div class="stat-card stat-card--done"><div class="stat-label">Cached</div><div class="stat-value" style="font-size:1.8rem">${data.cached}</div></div>
+      <div class="stat-card stat-card--pending"><div class="stat-label">New</div><div class="stat-value" style="font-size:1.8rem">${data.new}</div></div>
+      <div class="stat-card stat-card--filtered"><div class="stat-label">Skipped</div><div class="stat-value" style="font-size:1.8rem">${data.skipped||0}</div></div>
+    </div>
+  `;
+
+  if (data.new + data.changed > 0) {
+    document.getElementById('pipelineConfig').style.display = 'block';
+    toast(`Found ${data.new + data.changed} files to process`, 'info');
+  } else {
+    document.getElementById('pipelineConfig').style.display = 'none';
+    toast('All files already processed', 'success');
+  }
+
+  // Refresh dir list
+  refreshStats();
+}
+
+async function pipelineStart() {
+  const sel = document.getElementById('pipelineDir');
+  const dir = sel.value.trim() || document.getElementById('pipelineDirCustom').value.trim();
+  const speaker = document.getElementById('pipelineSpeaker').value.trim() || 'heroine';
+  const language = document.getElementById('pipelineLanguage').value.trim() || 'ja';
+  const concurrency = parseInt(document.getElementById('pipelineConcurrency').value) || 3;
+  const fixAudio = document.getElementById('pipelineFix').checked;
+  const skipPost = document.getElementById('pipelineSkipPost').checked;
+
+  if (!dir) { toast('Select a directory first', 'warn'); return; }
+
+  document.getElementById('btnProcess').disabled = true;
+  document.getElementById('btnProcess').textContent = 'Starting...';
+  document.getElementById('pipelineProgress').style.display = 'block';
+  document.getElementById('pipelineResults').style.display = 'none';
+  document.getElementById('logConsole').innerHTML = '<div class="log-line log-line--info">Starting ASR pipeline...</div>';
+
+  const data = await api('POST', '/api/process', {
+    dir_path:dir, speaker, language, concurrency,
+    fix_audio: fixAudio, skip_postprocess: skipPost
+  });
+
+  if (!data.ok) {
+    toast(data.error, 'error');
+    document.getElementById('btnProcess').disabled = false;
+    document.getElementById('btnProcess').textContent = '▶ Start Processing';
+    return;
+  }
+
+  if (data.message === 'no_work') {
+    document.getElementById('pipelineProgress').style.display = 'none';
+    toast('All files already processed!', 'success');
+    document.getElementById('btnProcess').disabled = false;
+    document.getElementById('btnProcess').textContent = '▶ Start Processing';
+    return;
+  }
+
+  // Connect SSE
+  connectSSE(data.task_id);
+}
+
+function connectSSE(taskId) {
+  const es = new EventSource('/api/stream/' + taskId);
+  let finalResult = null;
+
+  es.addEventListener('progress', (e) => {
+    const d = JSON.parse(e.data);
+    document.getElementById('progPct').textContent = Math.round(d.pct) + '%';
+    document.getElementById('progFill').style.width = d.pct + '%';
+    document.getElementById('progFiles').textContent = d.done + ' / ' + d.total;
+    document.getElementById('progElapsed').textContent = Math.round(d.elapsed) + 's';
+    document.getElementById('progEta').textContent = Math.round(d.eta) + 's';
+    document.getElementById('progFile').textContent = d.current_file || '';
+
+    const cls = d.status === 'ok' ? 'log-line--ok' : 'log-line--err';
+    const log = document.getElementById('logConsole');
+    let line = `<div class="log-line ${cls}">[${d.done}/${d.total}] ${d.status === 'ok' ? '✓' : '✗'} ${escapeHtml(d.current_file)}`;
+    if (d.error) line += ` <span style="color:var(--text-muted);font-size:0.7rem">— ${escapeHtml(d.error.substring(0,120))}</span>`;
+    line += '</div>';
+    log.innerHTML += line;
+    log.scrollTop = log.scrollHeight;
+  });
+
+  es.addEventListener('complete', (e) => {
+    finalResult = JSON.parse(e.data);
+    const log = document.getElementById('logConsole');
+    log.innerHTML += `<div class="log-line log-line--info">── Complete in ${Math.round(finalResult.elapsed)}s ──</div>`;
+    log.innerHTML += `<div class="log-line log-line--ok">✓ Done: ${finalResult.done_count}  ✗ Errors: ${finalResult.error_count}</div>`;
+    log.scrollTop = log.scrollHeight;
+  });
+
+  es.addEventListener('error', (e) => {
+    try { const d = JSON.parse(e.data); toast(d.message, 'error'); } catch(_) {}
+  });
+
+  es.addEventListener('done', () => {
+    es.close();
+    document.getElementById('btnProcess').disabled = false;
+    document.getElementById('btnProcess').textContent = '▶ Start Processing';
+    updateStatus(false);
+
+    if (finalResult) {
+      showPipelineResults(finalResult);
+    }
+
+    refreshStats();
+    refreshFiles();
+  });
+}
+
+function showPipelineResults(result) {
+  const container = document.getElementById('pipelineResults');
+  container.style.display = 'block';
+  const elapsed = result.elapsed ? Math.round(result.elapsed) : 0;
+  const min = Math.floor(elapsed/60);
+  const sec = elapsed % 60;
+  container.innerHTML = `
+    <div class="card card--glow">
+      <div class="card-header"><span class="icon">✓</span> Processing Complete</div>
+      <div class="stats-grid" style="margin-bottom:0">
+        <div class="stat-card stat-card--done">
+          <div class="stat-label">Succeeded</div>
+          <div class="stat-value" style="font-size:1.8rem">${result.done_count}</div>
+        </div>
+        <div class="stat-card stat-card--error">
+          <div class="stat-label">Failed</div>
+          <div class="stat-value" style="font-size:1.8rem">${result.error_count}</div>
+        </div>
+        <div class="stat-card stat-card--total">
+          <div class="stat-label">Duration</div>
+          <div class="stat-value" style="font-size:1.8rem">${min}m ${sec}s</div>
+        </div>
+        ${result.version ? `<div class="stat-card stat-card--pending">
+          <div class="stat-label">Export</div>
+          <div class="stat-value" style="font-size:1.4rem">v${result.version}</div>
+        </div>` : ''}
+      </div>
+      ${result.postprocess ? `<div class="mt-16 text-dim" style="font-size:0.85rem">
+        Post-process: ${result.postprocess.total} items · ${result.postprocess.normalized} normalized · ${result.postprocess.filtered} filtered
+      </div>` : ''}
+    </div>
+  `;
+}
+
+/* ── Files ───────────────────────────────────────────────────── */
+let currentFileStatus = '';
+async function refreshFiles() {
+  const dir = document.getElementById('filesDirFilter').value;
+  const params = 'status=' + currentFileStatus + '&dir=' + encodeURIComponent(dir) + '&limit=100';
+  const data = await api('GET', '/api/files?' + params);
+  const tbody = document.getElementById('filesTableBody');
+  document.getElementById('filesCount').textContent = (data.total||0) + ' files';
+
+  if (!data.files || data.files.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><p>No files found.</p></div></td></tr>';
+    return;
+  }
+
+  const statusBadge = s => `<span class="badge badge--${s}">${s}</span>`;
+  tbody.innerHTML = data.files.map(f => `
+    <tr>
+      <td title="${escapeHtml(f.file_path||'')}">${escapeHtml(f.file_name||'')}</td>
+      <td>${statusBadge(f.status||'?')}</td>
+      <td>${escapeHtml(f.emotion||f.emotion_final||'—')}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(f.asr_text||'')}">${escapeHtml((f.asr_text||'').substring(0,60))||'—'}</td>
+      <td>${f.duration_ms ? (f.duration_ms/1000).toFixed(1)+'s' : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+document.querySelectorAll('#fileFilters button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#fileFilters button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFileStatus = btn.dataset.status;
+    refreshFiles();
+  });
+});
+
+/* ── Export ──────────────────────────────────────────────────── */
+async function generateExport() {
+  const dir = document.getElementById('exportDir').value.trim() || document.getElementById('exportDirCustom').value.trim();
+  const output = document.getElementById('exportOutput').value.trim() || './output';
+  const speaker = document.getElementById('exportSpeaker').value.trim() || 'heroine';
+  const language = document.getElementById('exportLanguage').value.trim() || 'ja';
+
+  const data = await api('POST', '/api/export', {
+    dir_path:dir, output, speaker, language
+  });
+
+  const result = document.getElementById('exportResult');
+  if (!data.ok) {
+    result.innerHTML = `<div class="alert alert--error">${data.error}</div>`;
+    return;
+  }
+
+  let emoHtml = '';
+  if (data.emotion_counts) {
+    emoHtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">' +
+      Object.entries(data.emotion_counts).map(([e,c]) =>
+        `<span class="badge badge--done">${e}: ${c}</span>`
+      ).join('') + '</div>';
+  }
+
+  result.innerHTML = `
+    <div class="card card--glow">
+      <div class="card-header"><span class="icon">✓</span> Export Complete — v${data.version}</div>
+      <div style="font-family:var(--font-mono);font-size:0.82rem">
+        <div>📁 ${escapeHtml(data.output_dir)}/</div>
+        <div class="mt-16 text-dim">├── list.txt (${data.total} entries)</div>
+        <div class="text-dim">└── annotations.json (${data.total} records)</div>
+        ${emoHtml}
+      </div>
+    </div>
+  `;
+  toast(`Exported v${data.version} — ${data.total} files`, 'success');
+}
+
+/* ── Refresh Durations ──────────────────────────────────────── */
+async function refreshDurations() {
+  toast('Scanning durations...', 'info');
+  const data = await api('POST', '/api/refresh-durations');
+  if (data.ok) {
+    toast(data.message, data.failed ? 'warn' : 'success');
+    refreshStats();
+    refreshFiles();
+  } else {
+    toast(data.error || 'Failed', 'error');
+  }
+}
+
+/* ── Clear Cache ─────────────────────────────────────────────── */
+async function clearCache() {
+  if (!confirm('Clear all cached data? This cannot be undone.')) return;
+  const alsoClearDirs = confirm('Also remove all registered directories from the list?');
+  const data = await api('DELETE', '/api/cache?clear_dirs=' + alsoClearDirs);
+  if (data.ok) {
+    toast(data.message, 'success');
+    refreshStats();
+    refreshFiles();
+  } else {
+    toast(data.error || 'Failed', 'error');
+  }
+}
+
+/* ── Utils ───────────────────────────────────────────────────── */
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+refreshStats();
+</script>
+</body>
+</html>

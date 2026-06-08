@@ -41,7 +41,7 @@ def call_asr(file_path: Path, language_hint: Optional[str] = None) -> dict:
     try:
         import dashscope
     except ImportError:
-        sys.exit(
+        raise RuntimeError(
             "dashscope 未安装。请运行: pip install dashscope\n"
             "并设置环境变量: DASHSCOPE_API_KEY=sk-xxx"
         )

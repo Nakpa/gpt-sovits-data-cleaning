@@ -21,12 +21,12 @@ async def process_files(
     language_hint: Optional[str] = None,
     concurrency: int = 3,
     fix_audio: bool = False,
-    on_progress: Optional[Callable[[int, int, str, str], None]] = None,
+    on_progress: Optional[Callable[[int, int, str, str, str], None]] = None,
 ):
     """并发 ASR 转写，原始文本直接落库。
 
-    on_progress(done, total, current_file, status): 进度回调
-    status: ok | error
+    on_progress(done, total, current_file, status, error_msg): 进度回调
+    status: ok | error, error_msg: 错误详情（仅 status=error 时有值）
     """
     total = len(file_paths)
     done = 0
@@ -47,10 +47,27 @@ async def process_files(
 
             try:
                 loop = asyncio.get_running_loop()
+                error_detail = ""
 
                 # 0. 自动修复 (可选)
                 if fix_audio:
-                    await loop.run_in_executor(executor, fix_audio_file, fp, False)
+                    fix_result = await loop.run_in_executor(executor, fix_audio_file, fp, False)
+                    # ffmpeg 转换 .ogg/.mp3 → .wav 后更新 fp 和 DB 记录
+                    if isinstance(fix_result, dict):
+                        conv = fix_result.get("ffmpeg_convert", {})
+                        new_path = conv.get("new_path", "")
+                        if new_path:
+                            new_fp = Path(new_path)
+                            new_name = new_fp.name
+                            new_hash = compute_md5(new_fp)
+                            conn.execute(
+                                "UPDATE audio_cache SET file_path = ?, file_name = ?, file_hash = ? WHERE file_name = ? AND file_hash = ?",
+                                (str(new_fp), new_name, new_hash, file_name, file_hash),
+                            )
+                            conn.commit()
+                            fp = new_fp
+                            file_name = new_name
+                            file_hash = new_hash
 
                 # 1. 音频质量检测
                 quality = await loop.run_in_executor(executor, validate_audio_quality, fp)
@@ -71,21 +88,23 @@ async def process_files(
                         status="done",
                         quality_issues=quality_issues,
                         raw_asr_text="",                  # 归一化后再写
+                        source_dir=str(fp.parent.resolve()),
                     )
                     proc_status = "ok"
                 else:
-                    error_msg = str(result.get("raw_response", {}).get("error", "empty transcription"))
+                    error_detail = str(result.get("raw_response", {}).get("error", "empty transcription"))
                     if quality_issues:
-                        error_msg += " | audio: " + "; ".join(quality_issues)
-                    save_error(conn, file_name, file_hash, error_msg)
+                        error_detail += " | audio: " + "; ".join(quality_issues)
+                    save_error(conn, file_name, file_hash, error_detail)
 
             except Exception as e:
-                save_error(conn, file_name, file_hash, str(e))
+                error_detail = str(e)
+                save_error(conn, file_name, file_hash, error_detail)
 
             async with lock:
                 done += 1
                 if on_progress:
-                    on_progress(done, total, fp.name, proc_status)
+                    on_progress(done, total, fp.name, proc_status, error_detail or "")
 
     await asyncio.gather(*[process_one(fp) for fp in file_paths])
     executor.shutdown(wait=False)

@@ -1,7 +1,13 @@
-"""音频自动修复 — 重采样、响度归一化、去削波."""
+"""音频自动修复 — 重采样、响度归一化、去削波。
+
+WAV 文件用内置 wave 处理，OGG/MP3/FLAC 等用 ffmpeg 转码。
+"""
 
 import math
+import os
 import struct
+import subprocess
+import tempfile
 import wave
 from pathlib import Path
 
@@ -10,11 +16,7 @@ PEAK_TARGET = 0.707  # -3dBFS
 
 
 def fix_sample_rate(path: Path, dry_run: bool = False) -> dict:
-    """重采样到 32kHz，返回 {fixed, orig_sr, method}。
-
-    支持常见转换: 48k→32k (比 2/3)、44.1k→32k、16k→32k (比 2)。
-    48kHz↔44.1kHz 互转等复杂比率用线性插值兜底。
-    """
+    """重采样到 32kHz，返回 {fixed, orig_sr, method}。"""
     samples, orig_sr, _ = _read_wav(path)
 
     if orig_sr == REQUIRED_SR:
@@ -54,11 +56,7 @@ def fix_loudness(path: Path, dry_run: bool = False) -> dict:
 
 
 def fix_clipping(path: Path, dry_run: bool = False) -> dict:
-    """削减波: 将整体 gain 降到 90%，让原来削的部分回缩。
-
-    注意: 已削平的波形无法真正还原，这只是降 gain 避免进一步失真。
-    严重削波 (削波率 > 10%) 建议重录。
-    """
+    """削减波: 将整体 gain 降到 90%，让原来削的部分回缩。"""
     samples, sr, _ = _read_wav(path)
 
     max_val = max(abs(s) for s in samples)
@@ -75,10 +73,23 @@ def fix_clipping(path: Path, dry_run: bool = False) -> dict:
 
 
 def auto_fix(path: Path, dry_run: bool = False) -> dict:
-    """综合修复: 采样率 → 响度 → 削波，返回每步结果。"""
-    results = {}
+    """综合修复。
 
-    # 先用 WAV header 快速判断采样率，避免每次都读 PCM
+    WAV 文件: 内置 wave 处理 → 重采样 + 归一化 + 去削波。
+    非 WAV 文件 (ogg/mp3/flac): 用 ffmpeg 转 32kHz/16bit/mono WAV，
+    替换原文件（原文件备份为 .bak）。
+    """
+    suffix = path.suffix.lower()
+    if suffix == ".wav":
+        return _auto_fix_wav(path, dry_run)
+    else:
+        return _auto_fix_ffmpeg(path, dry_run)
+
+
+# ── WAV path ──────────────────────────────────────────────────
+
+def _auto_fix_wav(path: Path, dry_run: bool = False) -> dict:
+    results = {}
     try:
         with wave.open(str(path), "rb") as wf:
             sr = wf.getframerate()
@@ -88,15 +99,113 @@ def auto_fix(path: Path, dry_run: bool = False) -> dict:
     if sr != REQUIRED_SR:
         results["sample_rate"] = fix_sample_rate(path, dry_run=dry_run)
 
-    # 重采样后再检查响度和削波（因为数据已变）
     results["loudness"] = fix_loudness(path, dry_run=dry_run)
     results["clipping"] = fix_clipping(path, dry_run=dry_run)
-
     results["any_fixed"] = any(r.get("fixed") for r in results.values() if isinstance(r, dict))
     return results
 
 
-# ── internals ──────────────────────────────────────────────
+# ── FFmpeg path (non-WAV) ─────────────────────────────────────
+
+def _auto_fix_ffmpeg(path: Path, dry_run: bool = False) -> dict:
+    """用 ffmpeg 将非 WAV 音频转为 32kHz 16-bit mono WAV。
+
+    替换原文件: .ogg → .wav，原文件备份为 .bak。
+    """
+    if dry_run:
+        # Check what ffmpeg would do
+        info = _ffprobe_info(path)
+        orig_sr = info.get("sample_rate", 0)
+        orig_fmt = info.get("format", path.suffix)
+        needs_fix = (orig_sr != REQUIRED_SR) or (info.get("channels", 1) > 1)
+        return {
+            "ffmpeg_convert": {
+                "fixed": needs_fix,
+                "orig_sr": orig_sr,
+                "orig_format": orig_fmt,
+                "target_sr": REQUIRED_SR,
+                "target_format": "wav",
+            },
+            "any_fixed": needs_fix,
+        }
+
+    # Build output path: replace extension with .wav
+    out_path = path.with_suffix(".wav")
+    if out_path.exists() and out_path.samefile(path) if False else False:
+        # Shouldn't happen since suffixes differ
+        pass
+
+    bak_path = path.with_suffix(path.suffix + ".bak")
+
+    cmd = [
+        "ffmpeg", "-y", "-v", "error",
+        "-i", str(path),
+        "-ar", str(REQUIRED_SR),
+        "-ac", "1",
+        "-sample_fmt", "s16",
+        str(out_path),
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            return {"error": f"ffmpeg failed: {result.stderr.strip()[:200]}"}
+
+        # Rename original to .bak
+        if bak_path.exists():
+            bak_path.unlink()
+        path.rename(bak_path)
+
+        # Move .wav to original location had it been .wav
+        # Actually out_path is already at the right location with .wav extension
+        # The file_path in DB still points to .ogg though — caller must update
+
+        # Get info
+        info = _ffprobe_info(out_path)
+        return {
+            "ffmpeg_convert": {
+                "fixed": True,
+                "orig_format": path.suffix,
+                "orig_path": str(path),
+                "new_path": str(out_path),
+                "backup_path": str(bak_path),
+                "target_sr": REQUIRED_SR,
+                "target_format": "wav",
+            },
+            "any_fixed": True,
+        }
+    except FileNotFoundError:
+        return {"error": "ffmpeg 未安装。请安装 ffmpeg 并确保在 PATH 中。"}
+    except Exception as e:
+        return {"error": f"ffmpeg error: {str(e)}"}
+
+
+def _ffprobe_info(path: Path) -> dict:
+    """用 ffprobe 获取音频流信息。"""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
+             "-show_streams", "-select_streams", "a:0", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            return {}
+        import json
+        info = json.loads(result.stdout)
+        streams = info.get("streams", [])
+        if not streams:
+            return {}
+        s = streams[0]
+        return {
+            "sample_rate": int(s.get("sample_rate", 0)),
+            "channels": int(s.get("channels", 1)),
+            "format": str(s.get("codec_name", "")),
+        }
+    except Exception:
+        return {}
+
+
+# ── internals ──────────────────────────────────────────────────
 
 def _read_wav(path: Path) -> tuple[list[int], int, int]:
     """读取 16-bit mono WAV → (samples, sample_rate, n_channels)."""
@@ -107,7 +216,6 @@ def _read_wav(path: Path) -> tuple[list[int], int, int]:
         raw = wf.readframes(n)
         fmt = f"<{n * ch}h"
         data = list(struct.unpack(fmt, raw))
-        # Mono-ify: average channels if stereo
         if ch > 1:
             samples = [sum(data[i : i + ch]) // ch for i in range(0, len(data), ch)]
         else:
@@ -125,26 +233,19 @@ def _write_wav(path: Path, samples: list[int], sr: int):
 
 
 def _resample(samples: list[int], orig_sr: int, target_sr: int) -> list[int]:
-    """多相重采样。整数比用 sinc，非整数比用线性插值。"""
     if orig_sr == target_sr:
         return samples[:]
 
-    # 整数比: 16k→32k, 8k→32k, etc.
     if target_sr % orig_sr == 0:
-        ratio = target_sr // orig_sr
-        return _upsample_hold(samples, ratio)
+        return _upsample_hold(samples, target_sr // orig_sr)
 
     if orig_sr % target_sr == 0:
-        ratio = orig_sr // target_sr
-        return _downsample_aa(samples, ratio)
+        return _downsample_aa(samples, orig_sr // target_sr)
 
-    # 分数比: 48k→32k (3/2 upsample → 1/3 downsample)
-    # 简化为: 用线性插值
     return _resample_linear(samples, orig_sr, target_sr)
 
 
 def _upsample_hold(samples: list[int], ratio: int) -> list[int]:
-    """零阶保持上采样。ratio=2 表示每样本复制一次。"""
     result = []
     for s in samples:
         result.extend([s] * ratio)
@@ -152,7 +253,6 @@ def _upsample_hold(samples: list[int], ratio: int) -> list[int]:
 
 
 def _downsample_aa(samples: list[int], ratio: int) -> list[int]:
-    """带简单抗混叠的下采样: 先移动平均再抽取。"""
     result = []
     buf = []
     for s in samples:
@@ -164,7 +264,6 @@ def _downsample_aa(samples: list[int], ratio: int) -> list[int]:
 
 
 def _resample_linear(samples: list[int], orig_sr: int, target_sr: int) -> list[int]:
-    """线性插值重采样，通用但质量一般。适用于 48k→32k 等分数比。"""
     n = len(samples)
     if n < 2:
         return samples[:]
