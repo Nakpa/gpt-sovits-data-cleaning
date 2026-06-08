@@ -41,6 +41,8 @@ python server.py --port 9000       # 自定义端口
 | **Files** | 按目录/状态（done/pending/error/filtered）浏览已处理文件，查看转写文本 |
 | **Export** | 选择目录生成 GPT-SoVITS 训练格式输出（list.txt + annotations.json） |
 
+侧边栏底部提供浅色/暗色主题切换，偏好自动保存。
+
 ### 多目录管理
 
 Dashboard 支持注册多个音频目录，每个目录独立统计。Pipeline/Files/Export 页面通过下拉菜单切换目录。
