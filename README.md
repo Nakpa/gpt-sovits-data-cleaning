@@ -146,11 +146,13 @@ output/
 ### list.txt
 
 ```
-happy/rec001.wav|heroine|ja|happy|今日は本当に嬉しいよ！
-sad/rec002.wav|heroine|ja|sad|もう、泣きそうだよ…
+D:/datasets/voice/happy/rec001.wav|heroine|ja|今日は本当に嬉しいよ！
+D:/datasets/voice/sad/rec002.wav|heroine|ja|もう、泣きそうだよ…
 ```
 
-格式: `相对路径|speaker|language|emotion|text`
+格式: `vocal_path|speaker_name|language|text`
+
+语言代码: `zh`(中文) `ja`(日语) `en`(英语) `ko`(韩语) `yue`(粤语)
 
 ### annotations.json
 

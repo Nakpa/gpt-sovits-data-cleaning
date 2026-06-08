@@ -62,10 +62,11 @@ def export_all(conn, audio_dir: Path, output_root: Path, speaker: str, language:
         if src_path.exists() and not dst_path.exists():
             shutil.copy2(src_path, dst_path)
 
-        rel_path = f"{emotion}/{file_name}"
         text = (rec.get("asr_text") or "").replace("|", " ")
+        vocal_path = str(src_path.resolve())
 
-        list_lines.append(f"{rel_path}|{speaker}|{language}|{emotion}|{text}")
+        # GPT-SoVITS 训练格式: vocal_path|speaker_name|language|text
+        list_lines.append(f"{vocal_path}|{speaker}|{language}|{text}")
 
         json_data.append({
             "file": rel_path,
